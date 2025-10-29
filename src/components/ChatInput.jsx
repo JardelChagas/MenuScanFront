@@ -29,15 +29,25 @@ export default function ChatInput({ onSend, preloadedImage, onClearImage }) {
     return () => inputEl.removeEventListener("paste", handlePaste);
   }, []);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!text.trim() && !image) return;
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!text.trim() && !image) return;
 
-    onSend({ text, image });
-    setText("");
-    setImage(null);
-    if (onClearImage) onClearImage();
-  };
+  let base64Image = null;
+  if (image && image.startsWith("blob:")) {
+    const blob = await fetch(image).then(r => r.blob());
+    const reader = new FileReader();
+    base64Image = await new Promise(resolve => {
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  onSend({ text, image: base64Image });
+  setText("");
+  setImage(null);
+  if (onClearImage) onClearImage();
+};
 
   const handleImageChange = (file) => {
     if (!file) return;

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ChatMessage from "../components/ChatMessage.jsx";
 import ChatInput from "../components/ChatInput.jsx";
+import { v4 as uuidv4 } from "uuid";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([
@@ -8,52 +9,52 @@ export default function ChatPage() {
   ]);
   const [loading, setLoading] = useState(false);
   const [draggedImage, setDraggedImage] = useState(null);
+  const [conversationId] = useState(uuidv4());
 
   const handleSend = async (message) => {
-    const newMessages = [...messages, { role: "user", ...message }];
-    setMessages(newMessages);
+    setMessages((prev) => [...prev, { role: "user", ...message }]);
+    setLoading(true);
 
-    // Se houver texto, chama a API
-    if (message.text) {
-      setLoading(true);
-      try {
-        const response = await fetch("https://sua-api-chat.com/respond", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: newMessages.filter(
-              (m) => m.role === "user" || m.role === "assistant"
-            ),
-            userInput: message.text,
-          }),
-        });
-        const data = await response.json();
+    try {
+      const response = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: message.text || null,
+          image: message.image || null,
+        }),
+      });
 
+      const data = await response.json();
+
+      // ✅ Se o backend retornar um link de download
+      if (data.downloadUrl) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: data.reply,
+            downloadUrl: data.downloadUrl, // passa o link
+          },
+        ]);
+      } else {
         setMessages((prev) => [
           ...prev,
           { role: "assistant", text: data.reply },
         ]);
-      } catch (error) {
-        console.error("Erro na API:", error);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Ocorreu um erro. Tente novamente." },
-        ]);
-      } finally {
-        setLoading(false);
       }
-    }
-
-    // Se não houver texto (apenas imagem), envia mensagem padrão
-    if (!message.text && message.image) {
+    } catch (err) {
+      console.error(err);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: "Imagem recebida!" },
+        { role: "assistant", text: "Erro ao se comunicar com o servidor." },
       ]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Drag & drop handlers no chat
+  // Drag & Drop (arrastar imagem para o chat)
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
@@ -73,17 +74,26 @@ export default function ChatPage() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
+      {/* 🧠 Área das mensagens */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {messages.map((m, i) => (
-          <ChatMessage key={i} role={m.role} text={m.text} image={m.image} />
+          <ChatMessage
+            key={i}
+            role={m.role}
+            text={m.text}
+            image={m.image}
+            downloadUrl={m.downloadUrl} // ✅ agora o botão aparece
+          />
         ))}
 
         {loading && (
-          <div className="text-gray-500 dark:text-gray-400 italic">Digitando...</div>
+          <div className="text-gray-500 dark:text-gray-400 italic">
+            Digitando...
+          </div>
         )}
       </div>
 
-      {/* Se arrastou uma imagem para o chat, mostra no input */}
+      {/* 📸 Campo de entrada com imagem arrastada */}
       <ChatInput
         onSend={handleSend}
         preloadedImage={draggedImage}
